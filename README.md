@@ -4,8 +4,8 @@ A work-in-progress discord bot library written (as a learning project) in OCaml.
 
 # Requirements
 
-- ocaml-websocket
-- lwt
+- websocket-lwt-unix
+- lwt_ppx
 - yojson
 
 # Contributing

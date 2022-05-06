@@ -9,28 +9,25 @@ let intents = 1024 + 512 + 1
 
 let rec send_heartbeat conn interval =
     let open Websocket in
-        ( if !recv_hb_ack = false
-        then
-            write conn (Frame.close 1000)
-        else
-            Lwt.return_unit ) >>= fun () ->
-        Lwt_io.printf "Sleeping for %s ms...\n" (string_of_float interval) >>= fun () ->
-        Lwt_unix.sleep (interval /. 1000.) >>= fun () ->
-        ( if !last_seq < 0
-        then
+        let%lwt () = if !recv_hb_ack = false then
+                     write conn (Frame.close 1000)
+                     else Lwt.return_unit;
+                     Lwt_io.printf "Sleeping for %s ms...\n" (string_of_float interval);
+                     Lwt_unix.sleep (interval /. 1000.) in
+
+        let%lwt content = if !last_seq < 0 then
             Lwt.return "{\"op\": 1, \"d\": null}"
-        else
-            Lwt.return ("{\"op\": 1, \"d\": " ^ (string_of_int !last_seq) ^ "}") )
-        >>= fun content ->
-            write conn (Frame.create ~content ()) >>= fun () ->
-                recv_hb_ack := false;
-                send_heartbeat conn interval
+        else Lwt.return ("{\"op\": 1, \"d\": " ^ (string_of_int !last_seq) ^ "}") in
+
+        let%lwt () = write conn (Frame.create ~content ()) in
+        recv_hb_ack := false;
+        send_heartbeat conn interval
 
 let identify conn =
     let open Websocket in
-        Lwt_io.open_file ~mode:Input "discord_token" >>= fun ic ->
-            Lwt_io.read_line ic >>= fun token ->
-                (Lwt.return ("{\"op\" : 2,
+        let%lwt ic = Lwt_io.open_file ~mode:Input "discord_token" in
+        let%lwt token = Lwt_io.read_line ic in
+        let%lwt content = (Lwt.return ("{\"op\" : 2,
                   \"d\"  : {
                       \"token\" : \"" ^ token ^ "\",
                       \"properties\" : {
@@ -40,17 +37,17 @@ let identify conn =
                           },
                       \"intents\" : " ^ (string_of_int intents) ^ "
                   }
-                }")) >>= fun content ->
-                    Lwt_io.printf "Sending token:\n%s\n" content;
-                    write conn (Frame.create ~content ())
+                }")) in
+        Lwt_io.printf "Sending token:\n%s\n" content;
+        write conn (Frame.create ~content ())
 
 let handle_in_content conn content =
     let open Yojson.Safe in
-    (Lwt.return (from_string content)) >>= fun json ->
-        (Lwt.return json) >|= Util.member "op" >|= Util.to_int >>= fun opcode ->
+    let%lwt json = (Lwt.return (from_string content)) in
+    let%lwt opcode = (Lwt.return json) >|= Util.member "op" >|= Util.to_int in
             match opcode with
-              10 -> (Lwt.return json) >|= Util.member "d" >|= Util.member "heartbeat_interval" >|= Util.to_number >>= fun interval ->
-                      send_heartbeat conn interval <?> identify conn;
+              10 -> let%lwt interval = (Lwt.return json) >|= Util.member "d" >|= Util.member "heartbeat_interval" >|= Util.to_number in
+                    send_heartbeat conn interval <?> identify conn;
                     Lwt_io.printf "Found ready opcode! Starting heartbeats\n"
 
             | 11 -> recv_hb_ack := true;
