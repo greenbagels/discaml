@@ -1,0 +1,6 @@
+*.o
+discord_token
+*.native
+*.out
+*.log
+_build
