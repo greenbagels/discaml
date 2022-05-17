@@ -13,6 +13,11 @@ module Util = struct
 
     let uri_of_resource res = Uri.of_string (api_url ^ res)
 
+    (*
+     * TODO: there's got to be a better (more general) way to handle all of
+     * these headers and methods...
+     *)
+
     let header_of_token token =
         ("Authorization", "Bot " ^ token)
 
@@ -57,7 +62,7 @@ module User = struct
         Util.http_get token "/users/@me/guilds"
 
     let get_current_user_guild_member token id =
-        Util.http_get token ("/users/@me/guilds" ^ id ^ "/member")
+        Util.http_get token ("/users/@me/guilds/" ^ id ^ "/member")
 
     let leave_guild token id =
         Util.http_delete token ("/users/@me/guilds/" ^ id)
@@ -75,13 +80,25 @@ module User = struct
 end
 
 module Channel = struct
-    (*
     let get_channel token id =
         Util.http_get token ("/channels/" ^ id)
 
     let modify_channel token id json =
-        Util.http_patch token ("/channels/" ^ id) json
-    *)
+        let ctype_hdr = ("Content-Type", "application/json") in
+        Util.http_patch ~headers:[ctype_hdr] token ("/channels/" ^ id) json
+
+    let delete_channel token id =
+        Util.http_delete token ("/channels/" ^ id)
+
+    let get_channel_messages token id =
+        Util.http_get token ("/channels/" ^ id ^ "/messages")
+
+    let get_channel_message token cid mid =
+        Util.http_get token ("/channels/" ^ cid ^ "/messages/" ^ mid)
+
+    let create_message token id json =
+        let ctype_hdr = ("Content-Type", "application/json") in
+        Util.http_post ~headers:[ctype_hdr] token ("/channels/" ^ id ^ "/messages") json
 
     (* Types would take a lot to implement, so how about we stick to handling
      * JSON directly and/or converting on the fly for now
@@ -138,4 +155,6 @@ module Channel = struct
 end
 
 module Gateway = struct
+    let get_gateway token =
+        Util.http_get token "/gateway"
 end
